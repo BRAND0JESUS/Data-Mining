@@ -1,0 +1,424 @@
+---
+title: "Métodos no supervisados"
+author: "Brando Aucancela"
+date: "11/14/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Ejercicio 1
+
+Presenta el juego de datos, nombre y significado de cada columna, así como las distribuciones de sus valores.
+Adicionalmente realiza un estudio similar al de los ejemplos 1.1 y 1.2
+
+## Método de agregación k-means con datos reales
+
+Debido a que se tiene datos reales solo se incluyó ciertas partes del punto 1.1
+
+Librerías
+
+```{r cars}
+if(!require('Stat2Data'))install.packages('Stat2Data')
+library(Stat2Data)
+if(!require('cluster'))install.packages('cluster')
+library(cluster)
+if(!require('fpc'))install.packages('fpc')
+library(fpc)
+```
+
+
+Carga de Base de Datos Hawks
+```{r}
+data("Hawks")
+summary(Hawks)
+```
+
+Verificamos la estructura del juego de datos principal.
+```{r}
+str(Hawks)
+```
+
+Los datos se recogieron en muestras aleatorias de tres especies diferentes de halcones: Colirrojo, Gavilán y Halcón de Cooper, donde posee 903 registros con 19 variables, cuyas columnas del datatest pertenecen a 
+
+**Month**
+  Mes de la captura de specimen.
+  
+**Day**
+  Día de la captura del specimen.
+  
+**Year**
+  Año de la captura del specimen.
+  
+**CaptureTime**
+  Hora de captura en formato (HH:MM).
+  
+**ReleaseTime**
+  Hora de lanzamiento en formato (HH:MM).
+  
+**BandNumber**
+  Código de banda de identificación.
+  
+**Species**
+  Es pecie a la que pertencie: CH= Cooper's, RT= Red-tailed, SS= Sharp-Shinned.
+  
+**Age**
+  Edad cualitativa: A=Adulto o I=Imaduro.
+  
+**Sex**
+  F=Mujer o M=Hombre.
+  
+**Wing**
+  Longitud (mm) de la pluma del ala primaria, desde la punta hasta la muñeca a la que se adhiere.
+  
+**Weight**
+  Peso corporal (gr).
+  
+**Culmen**
+  Longitud (mm) del pico superior, desde la punta hasta donde choca con la parte carnosa del ave.
+  
+**Hallux**
+  Longitud (mm) de la garra asesina.
+  
+**Tail**
+  Medida (mm) relacionada con la longitud de la cola (inventada en el MacBride Raptor Center).
+  
+**StandardTail**
+  Medida estándar de la longitud de la cola (mm).
+  
+**Tarsus**
+  Longitud del hueso básico del pie (mm).
+  StandardTail      KeelFat         Crop
+  
+**WingPitFat**
+  Cantidad de grasa en el hoyo de las alas.
+  
+**KeelFat**
+  Cantidad de grasa en el esternón (medida por tacto).
+  
+**Crop**
+  Cantidad de material en el cultivo, codificado de1=lleno a 0=vacío.
+
+La información fue obtenida de: https://vincentarelbundock.github.io/Rdatasets/doc/Stat2Data/Hawks.html
+
+Verificación de columnas con valores nulos
+
+```{r}
+colSums(is.na(Hawks))
+```
+
+
+Debido a que algunas comunas poseen valores nulos eliminamos las que contengan más de 800 valores nulos.
+```{r}
+Hawks <- Hawks[ , !(names(Hawks) %in% c('Tarsus', 'WingPitFat'))]
+```
+
+Colocamos la media en StandardTail para que no se pierda muchos datos al momento de eliminar las filas que comtemgan valores nulos.
+```{r}
+Hawks$StandardTail[is.na(Hawks$StandardTail)] <- mean(Hawks$StandardTail,na.rm=T)
+```
+
+
+Al tener los nombre de lcaracteristicas (columnas) se consideraía como problema de clasifición supervisada, por lo que eliminamos la columna Species
+
+```{r}
+x_0 <- na.omit(Hawks[, c("Wing", "Weight", "Culmen", "Hallux", "Tail", "StandardTail")])
+```
+
+Normalizado de columnas 
+```{r}
+#definición de la funcion Min-Max
+min_max_norm <- function(x) {
+    (x - min(x)) / (max(x) - min(x))
+  }
+```
+
+
+```{r}
+#aplicacion de MIn-Max al dataframe X
+x <- as.data.frame(lapply(x_0, min_max_norm))
+```
+
+```{r}
+hist(x_0$Wing,xlab="Numero de evaluaciones sin Normalizar", col=rainbow(14) ,ylab="Longitud (mm) de la pluma del ala primaria")
+```
+
+```{r}
+hist(x$Wing,xlab="Numero de evaluaciones Normalizada", col=rainbow(14) ,ylab="Longitud (mm) de la pluma del ala primaria")
+```
+```{r}
+hist(x_0$Tail,xlab="Numero de evaluaciones sin Normalizar", col=rainbow(14) ,ylab="Medida (mm) relacionada con la longitud de la cola")
+```
+
+```{r}
+hist(x$Tail,xlab="Numero de evaluaciones Normalizada", col=rainbow(14) ,ylab="Medida (mm) relacionada con la longitud de la cola")
+```
+
+Como podemos visualizar en la distrbucion del los variogramas, tenemos que al tratarse de variables de distancia debemos realizarl una estandarización es por lo que se ha realizado un funcion para aplicarla al Dataset
+
+```{r}
+str(x)
+```
+
+Probamos varios valores para en contrar el número óptimo de clusters
+```{r message= FALSE, warning=FALSE}
+d <- daisy(x) 
+resultados <- rep(0, 10)
+for (i in c(2,3,4,5,6,7,8,9,10))
+{
+  fit           <- kmeans(x, i)
+  y_cluster     <- fit$cluster
+  sk            <- silhouette(y_cluster, d)
+  resultados[i] <- mean(sk[,3])
+}
+```
+Grafica de los silueta media para determinacion de el mejor número de cluster
+
+
+```{r message= FALSE, warning=FALSE}
+plot(2:10,resultados[2:10],type="o",col=rainbow(14),pch=0,xlab="Número de clusters",ylab="Silueta")
+```
+
+Como se puede observar el mejor número de cluster k es 3
+
+Determinación gráfica por el método del codo (elbow)
+
+```{r}
+resultados<-rep(0,10)
+for(i in c(2,3,4,5,6,7,8,9,10)) {
+  fit <- kmeans(x, i)
+  resultados[i] <- fit$tot.withinss
+  }
+plot(2:10,resultados[2:10],type="o",col="blue",pch=0,xlab="Número de clusters",ylab="tot.tot.withinss")
+```
+
+Como podemos observar el número optimo nos resulta 4 que es cuando la curva tiende a poseer una curva menos pronunciada (codo)
+
+Determinación k a través de la función kmeansruns del paquete fpc.
+```{r}
+fit_ch<-kmeansruns(x,krange =1:10,criterion ="ch")
+fit_asw<-kmeansruns(x,krange =1:10,criterion ="asw")
+```
+```{r}
+fit_ch$bestk
+```
+```{r}
+fit_asw$bestk
+```
+```{r}
+plot(1:10,fit_ch$crit,type="o",col="blue",pch=0,xlab="Número de clústers",ylab="Criterio Calinski-Harabasz")
+```
+```{r}
+plot(1:10,fit_asw$crit,type="o",col="blue",pch=0,xlab="Número de clústers",ylab="Criterio silueta media")
+```
+
+Con el criterio de la silueta media y el de Calinski-Harabasz se obtiene dos clusters en ambos casos.
+Como en los datos originales tenemos el total de especies podemos afirmar que el numero de cluster correcto es 3.
+Comprovamos visualmente con el valor real guardado en Species el el dataframe original.
+
+Por motivos de aprendizaje se aplicará diferentes valores de k.
+
+```{r}
+Hawks_2_clusters<-kmeans(x,2)
+Hawks_4_clusters<-kmeans(x,4)
+Hawks_6_clusters<-kmeans(x,6)
+```
+
+```{r}
+
+plot(x[c(1,2)],col=Hawks_2_clusters$cluster,main="Clasificación k-means")
+```
+
+```{r}
+plot(x[c(2,5)],col=Hawks_4_clusters$cluster,main="Clasificación k-means")
+```
+
+```{r}
+plot(x[c(3,4)],col=Hawks_6_clusters$cluster,main="Clasificación k-means")
+```
+
+Como se esplicó anteriormente el valor real de k es 3, por lo cual procedemos a nalizarlo.
+
+```{r}
+Hawks3clusters<-kmeans(x,3)
+# Wing y Weight
+plot(x[c(1,2)],col=Hawks3clusters$cluster,main="Clasificación k-means")
+```
+
+```{r}
+plot(x[c(1,2)],col=as.factor(Hawks$Species),main="Clasificación real")
+```
+Podemos identificar que Wing y Weight no son buenos indicadores para fiferenciar las tres subespecies debido a que dos de las subespecies están demasiado mezcladas para poder diferenciar nada
+
+```{r}
+# Wing y Culmen
+plot(x[c(1,3)],col=Hawks3clusters$cluster,main="Clasificación k-means")
+```
+
+```{r}
+plot(x[c(1,3)],col=as.factor(Hawks$Species),main="Clasificación real")
+```
+
+```{r}
+# Wing y Hallux
+plot(x[c(1,4)],col=Hawks3clusters$cluster,main="Clasificación k-means")
+```
+
+```{r}
+plot(x[c(1,4)],col=as.factor(Hawks$Species),main="Clasificación real")
+```
+
+```{r}
+# Wing y Tail
+plot(x[c(1,5)],col=Hawks3clusters$cluster,main="Clasificación k-means")
+```
+
+```{r}
+plot(x[c(1,5)],col=as.factor(Hawks$Species),main="Clasificación real")
+```
+
+```{r}
+# Hallux y Tail
+plot(x[c(5,4)],col=Hawks3clusters$cluster,main="Clasificación k-means")
+```
+
+```{r}
+plot(x[c(5,4)],col=as.factor(Hawks$Species),main="Clasificación real")
+```
+
+Al visualizar todas las posibes graficas se pudo determinar que en su mayporia la clasificación K-Mean no sería la idonea para los datos propuestos, es por ello que el mejor ajuste se obtuvo con las variables de Hallux y Tail donde los de color verde se asume que son los de la especie SS= Sharp-Shinned y los de color negro serán RT= Red-tailed y por últimos los de color rojo será la especie CH= Cooper's.
+
+
+# Ejercicio 2
+
+Con el juego de datos proporcionado realiza un estudio similar al del ejemplo 2
+
+## Métodos basados en densidad: DBSCAN y OPTICS
+
+```{r}
+if(!require('dbscan'))install.packages('dbscan')
+library(dbscan)
+```
+
+```{r}
+data("Hawks")
+```
+
+eliminación de columnas 
+```{r}
+Hawks <- Hawks[ , !(names(Hawks) %in% c('Tarsus', 'WingPitFat'))] # Eliminación de la columnas diferentes que 'Tarsus', 'WingPitFat'
+```
+
+Colocamos la media en StandardTail en sus valores nulos
+```{r}
+Hawks$StandardTail[is.na(Hawks$StandardTail)] <- mean(Hawks$StandardTail,na.rm=T)
+```
+
+Eliminamos la columna Species para ya que requerimos hacer una clasificación no supervisada
+
+```{r}
+x <- na.omit(Hawks[, c("Wing", "Weight", "Culmen", "Hallux", "Tail", "StandardTail")])
+```
+
+Asiganamos 3 zonas diferencidas ya que conocemos que solo existen 3 especies que queremos determinar. 
+
+```{r}
+plot(x[c(1,2)],col=rep(1:3,time =100))
+```
+El aloritmo posibilita que los puntos más cercansos se conviertan en vecinos a través del ordenamiento
+
+```{r message= FALSE, warning=FALSE}
+### Lanzamos el algoritmo OPTICS dejando el parámetro eps con su valor por defecto y fijando el criterio de vecindad en 10
+res <- optics(x[c(1,2)], minPts = 10)
+res
+```
+
+```{r}
+### Obtenemos la ordenación de las observaciones o puntos
+res$order
+
+```
+Visualización del algoritmo a través de un diagrama de alcanzabilidad donde los valles representan clusters (cuanto más profundo es el valle, más denso es el cluster), mientras que las cimas indican los puntos que están entre las agrupaciones (estos puntos son cadidatos a ser considerardos outliers)
+
+```{r}
+plot(res)
+```
+
+Otra repesentacion gráfica de alcanzabilidad donde se puede observar las trazas de las distancias entre puntos cercanos del mismo cluster y entre clusters distintos.
+
+
+```{r}
+### Dibujo de las trazas que relacionan puntos
+plot(x[c(1,2)],col ="grey")
+polygon(x[res$order,])
+```
+
+Agrupación de la ordenación realizada por OPTICS similar a lo que DBSCAN hubiera generado estableciendo el parámetro eps_cl = 0.065
+
+```{r}
+### Extracción de un clustering DBSCAN cortando la alcanzabilidad en el valor eps_cl donde eps es el máximo radio de vecindad
+res<-extractDBSCAN(res,eps_cl =40)
+res
+```
+
+```{r}
+plot(res)
+```
+
+Los 4 clusters coloreados y en negro se mantienen los valores outliers.
+
+Seguimos adelante con una representación gráfica que nos muestra los clusters mediante formas convexas.
+
+```{r}
+hullplot(x[c(1,2)], res)
+```
+
+Agrupación de la ordenación realizada por OPTICS similar a lo que DBSCAN hubiera generado estableciendo el parámetro eps_cl = 1
+
+```{r}
+### Incrementamos el parámetro eps
+res<-extractDBSCAN(res,eps_cl =85)
+res
+```
+
+```{r}
+plot(res)
+```
+
+```{r}
+hullplot(x[c(1,2)], res)
+```
+
+Variante de la extracción DBSCN anterior. En ella el parámetro xi nos va a servir para clasificar los clusters en función del cambio en la densidad relativa de los mismos.
+
+
+```{r message= FALSE, warning=FALSE}
+### Extracción del clustering jerárquico en función de la variación de la densidad por el método xi
+res <- extractXi(res, xi = 0.35)
+res
+```
+
+```{r}
+plot(res)
+```
+
+```{r}
+hullplot(x[c(1,2)], res)
+```
+
+# Ejercico 3
+Realiza una comparativa de los métodos k-means y DBSCAN
+
+Como podemos observar en ambos casos se realizan cluster (agrupaciones) de los elementos más cercanos a nuestra semilla.
+En el caso de DBSCAN nos brinda la posibilidad de tener figuras no geométricas las que abarquen a datos cuyos valores son extremos identificando las zonas que presentan la más baja densidad,es decir no se encuentran cerca tal como se pudo comprobar en los clusters de K-means donde poseen 3 grupos perfectamente definidos mismos que no correspondían a la Clasificación Real.
+
+Como se pudo observar en las dos últimas la distribución de los datos no es homogénea, ya que tenemos datos muy dispersos a través del plot en ambos casos lo que nos indica que el mejor algoritmo para la identificacion de las Species fue DBSCAN.
+
+Una desventaja que se podría mencionar respecto a DBSCAN se trata que se debió realizar mediante prueba y error para identidicar el parámaetro que mejor se ajuste al máximo radio de vecindad (épsilon) y el mínimo número de puntos en la ε-vecindad de un punto (minPts) además posibilita la cración de clusters sin necesidad de determinar su numero exacto a difencia del K-means en donde necesariamnete debemos otorgar el valor del número de centroides (k).
+
+El presente trabajo posibilita encontrar correlacionar variables para determinar agrupaciones mismas que correspondan a una categoría defeinida, en este caso las especies de alcones.
+Ya que el objetivo de esta tarea fue plantear algoritmos no supervisados es necesario eliminar la categoría Species, misma que será usadas para comparar los resultados obtenidos a través de los algoritsmos de clustering.

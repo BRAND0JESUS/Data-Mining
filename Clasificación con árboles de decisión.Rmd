@@ -1,0 +1,918 @@
+---
+title: "Clasificación con árboles de decisión"
+author: "Aucancela Brando"
+date: "12/14/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Carga de archivo credit
+```{r}
+data <- read.csv("credit.csv", header=TRUE)
+# summary(data)
+attach(data)
+```
+
+## Exploracion de la base de datos
+Primero obtenemos las dimensiones de la base de datos.
+
+### Exploración de la base de datos
+Obtenemos que disponemos de 1000 registros o 1000 (filas) y 21 variables (columnas). 
+```{r}
+dim(data)
+```
+
+Verificamos la estructura del juego de datos principal.
+```{r}
+str(data)
+```
+Donde las columnas del datatest pertenecen a:
+
+**checking_balance**
+  - saldo que posee en la cuenta.
+
+**months_loan_duration**
+  - meses de duración del préstamo.
+
+**credit_history**
+  - historial crediticio
+
+**purpose**
+  - propósito del préstamo
+
+**amount**
+  - monto/valor del préstamo solicitado
+
+**savings_balance**
+  - saldo ahorrado
+
+**employment_length**
+  - duracion del empleo
+
+**installment_rate**
+  - tasa de pago / porcentaje de la cuota respecto del total del préstamos solicitado
+
+**personal_status**
+  - estado personal / estado civil
+
+**other_debtors**
+  - otros deudores además del prestatario del dinero
+
+**residence_history**
+  - historial de residencia
+
+**property**
+  - propiedad
+
+**age**
+  - edad
+
+**installment_plan**
+  - origen del préstamos, qué tipo de institución lo concede
+
+**housing**
+  - tipo de alojamiento
+
+**existing_credits**
+  - número de creditos que posee.
+
+**default**
+  - impago del credito donde 1 = pago correcto y 2 =impagos.
+
+**dependents**
+  - dependientes
+
+**telephone**
+  - posee o no teléfono de contacto
+
+**foreign_worker**
+  - trabajador extranjero.
+
+**job**
+  - empleo.
+  
+Como el enunciado del ejercicio plante que no es necesario discretizar el Dataset se omiten algunos procesos.
+
+Cambiamos los valores de la columna default y dependents, donde el primer caso pase de 1 sea Pago OK y 2 sea Impago para que se lea como caracterires y no como datos enteros; en el segundo caso 1 será NO y 2 será SI 
+
+```{r}
+unique(data$default)
+```
+
+```{r}
+data$default <- ifelse(data$default == 1, "Pago OK", "Impago")
+data$dependents <- ifelse(data$dependents == 1, "NO", "YES")
+```
+
+## Visualización
+
+Instalacion de herramientas de visualización.
+
+```{r}
+if(!require(ggplot2)){
+    install.packages('ggplot2', repos='http://cran.us.r-project.org')
+    library(ggplot2)
+}
+if(!require(ggpubr)){
+    install.packages('ggpubr', repos='http://cran.us.r-project.org')
+    library(ggpubr)
+}
+if(!require(grid)){
+    install.packages('grid', repos='http://cran.us.r-project.org')
+    library(grid)
+}
+if(!require(gridExtra)){
+    install.packages('gridExtra', repos='http://cran.us.r-project.org')
+    library(gridExtra)
+}
+if(!require(C50)){
+    install.packages('C50', repos='http://cran.us.r-project.org')
+    library(C50)
+}
+
+```
+
+
+```{r}
+grid.newpage()
+plotbyChecking<-ggplot(data,aes(checking_balance))+geom_bar() +labs(x="Saldo", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Saldo")
+
+plotbyCreditHistory<-ggplot(data,aes(credit_history))+geom_bar() +labs(x="Historia del credito", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Historia del credito")
+
+plotbyPurpose<-ggplot(data,aes(purpose))+geom_bar() +labs(x="Proposito del credito", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Proposito del credito")
+
+plotbySavingsBalance<-ggplot(data,aes(savings_balance))+geom_bar() +labs(x="Saldo de ahorros", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Saldo de ahorros")
+
+plotbyEmploymentLength<-ggplot(data,aes(employment_length))+geom_bar() +labs(x="Tiempo de empleo", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Tiempo de empleo")   
+    
+plotbyPersonalStatus<-ggplot(data,aes(personal_status))+geom_bar() +labs(x="Estado personal", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Estado personal")
+      
+plotbyOtherDebtors<-ggplot(data,aes(other_debtors))+geom_bar() +labs(x="Otros deudores", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Otros deudores")
+
+plotbyProperty<-ggplot(data,aes(property))+geom_bar() +labs(x="Propiedad", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Propiedad")
+
+plotbyInstallmentPlan<-ggplot(data,aes(installment_plan))+geom_bar() +labs(x="Plan de pagos", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Plan de pagos")
+
+plotbyHousing<-ggplot(data,aes(housing))+geom_bar() +labs(x="Vivienda", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Vivienda")
+
+plotbyDefault<-ggplot(data,aes(default))+geom_bar() +labs(x="Impago", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Impago")
+
+plotbyJob<-ggplot(data,aes(job))+geom_bar() +labs(x="Trabajo", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Trabajo")
+
+grid.arrange(plotbyChecking,plotbyCreditHistory,plotbyPurpose,plotbySavingsBalance, ncol=2, nrow=2)
+```
+
+```{r}
+grid.arrange(plotbyEmploymentLength,plotbyPersonalStatus,plotbyOtherDebtors,plotbyProperty, ncol=2, nrow=2)
+```
+
+```{r}
+grid.arrange(plotbyInstallmentPlan,plotbyHousing,plotbyDefault,plotbyJob, ncol=2, nrow=2)
+```
+
+Como se puede observar existen cada grafico plantea una marcada diferencia entre toda la información disponible, pero lo que en realidad nos interesa es la relación de las variables respecto al impago del credito "default" es así que se debe realizar sus respectivas graficas de barras.
+
+```{r}
+grid.newpage()
+plotbyChecking<-ggplot(data,aes(checking_balance,fill=default))+geom_bar() +labs(x="Saldo", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Impago by Saldo")
+
+plotbyCreditHistory<-ggplot(data,aes(credit_history,fill=default))+geom_bar() +labs(x="Historia del credito", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Impago byHistoria del credito")
+
+plotbyPurpose<-ggplot(data,aes(purpose,fill=default))+geom_bar() +labs(x="Proposito del credito", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Impago by Proposito del credito")
+
+plotbySavingsBalance<-ggplot(data,aes(savings_balance,fill=default))+geom_bar() +labs(x="Saldo de ahorros", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Impago by Saldo de ahorros")
+
+plotbyEmploymentLength<-ggplot(data,aes(employment_length,fill=default))+geom_bar() +labs(x="Tiempo de empleo", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Impago by Tiempo de empleo")   
+    
+plotbyPersonalStatus<-ggplot(data,aes(personal_status,fill=default))+geom_bar() +labs(x="Estado personal", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Impago by Estado personal")
+      
+plotbyOtherDebtors<-ggplot(data,aes(other_debtors,fill=default))+geom_bar() +labs(x="Otros deudores", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Impago by Otros deudores")
+
+plotbyProperty<-ggplot(data,aes(property,fill=default))+geom_bar() +labs(x="Propiedad", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Impago by Propiedad")
+
+plotbyInstallmentPlan<-ggplot(data,aes(installment_plan,fill=default))+geom_bar() +labs(x="Plan de pagos", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Impago by Plan de pagos")
+
+plotbyHousing<-ggplot(data,aes(housing,fill=default))+geom_bar() +labs(x="Vivienda", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Impago by Vivienda")
+
+plotbyForeignWorker<-ggplot(data,aes(foreign_worker,fill=default))+geom_bar() +labs(x="Trabajador extranjero", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Impago by Trabajador extranjero")    
+
+plotbyJob<-ggplot(data,aes(job,fill=default))+geom_bar() +labs(x="Trabajo", y="Clientes")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Impago by Trabajo")
+
+grid.arrange(plotbyChecking,plotbyCreditHistory,plotbyPurpose,plotbySavingsBalance, ncol=2, nrow=2)
+```
+Listado de tablas de contingencia
+
+```{r}
+tabla_DChT<-table(checking_balance, default)
+tabla_DChT
+```
+
+```{r}
+prop.table(tabla_DChT,margin =1)
+```
+
+```{r}
+tabla_DCrT<-table(credit_history, default)
+tabla_DCrT
+```
+
+```{r}
+prop.table(tabla_DCrT,margin =1)
+```
+
+```{r}
+tabla_DPT<-table(purpose, default)
+tabla_DPT
+```
+
+```{r}
+prop.table(tabla_DPT,margin =1)
+```
+
+```{r}
+tabla_DSaT<-table(savings_balance, default)
+tabla_DSaT
+```
+
+```{r}
+prop.table(tabla_DSaT,margin =1)
+```
+
+Del primer conjunto de graficas y sus respectivas tablas de contingtencia se tiene que en todos los casos de la cantidad de Pago OK (1) es mayor en todos los casos, es decir respecto a las variables Saldo, Historial crediticio, etc.
+En el caso del Saldo podemos observar que existen más clientes con su saldo desconocido mismos que presentan 348 (88.3%) clientes que han pagado el credito y tan solo 46 (11.7%) que no han pagado. 
+En cuanto al historial crediticio se tiene un caso similar al de saldo donde los que tienen un historial crítico (critical) y pagado (repaid) son los que presentan más clientes 293 en el primer caso y 530 en el segundo.
+Para el proposito del credito se tiene  que existen clientes con mayor predominancia siendo estos por motivo de radio/tv, inmoviliario (furniture) y car y los de menor predominancia son retraining, doméstico y otros. Esta variable cumple con que los Pagos_OK son mayores a los Impagos.
+Por último el saldo ahorrado se tiene que los que posee un saldo <100 DM tienen mayor predominacia donde 386 tiene un pago_OK (64 %) y 217 (36 %) Impago.
+
+```{r}
+grid.arrange(plotbyEmploymentLength,plotbyPersonalStatus,plotbyOtherDebtors,plotbyProperty, ncol=2, nrow=2)
+```
+Listado de tablas de contingencia
+
+```{r}
+tabla_DEmT<-table(employment_length, default)
+tabla_DEmT
+```
+
+```{r}
+prop.table(tabla_DEmT,margin =1)
+```
+
+```{r}
+tabla_DPeT<-table(personal_status, default)
+tabla_DPeT
+```
+
+```{r}
+prop.table(tabla_DPeT,margin =1)
+```
+
+```{r}
+tabla_DOT<-table(other_debtors, default)
+tabla_DOT
+```
+
+```{r}
+prop.table(tabla_DOT,margin =1)
+```
+
+```{r}
+tabla_DPrT<-table(property, default)
+tabla_DPrT
+```
+
+```{r}
+prop.table(tabla_DPrT,margin =1)
+```
+
+En estem conjunto de graficas y tablas se tiene que al igual que el anterio analisis presentan un mayor porcentaje los clientes los cuales tienen un pago_OK sobre los que tienen Impago.
+Podemos destacar que las personas que cuentan con trabajo realizan más creditos mientras que las que estan desempleadas realizaron tan solo 62 (pago_OK y Impago).
+Mientras que para el estado personal se tiene que un hombre soltero realiza más creditos con 548, es decir más de la mitad de creditos ya que el Dataset presenta 1000. y las mujeres se las agrupa en un solo conjunto sin importar su estado con un total de 201 (65 %) de pago_OK y 109 (35 %) de Impagos.
+Por último tenemos que los que no poseen un co-solicitante o garante ya que posee 907 clientes repartidos en 635 pago_OK y 272 Impagos.
+En cuanto a la propiedad tenemos que la distribucion es más homgenea ya que no extiste mucha variación de un tipo de propiedad a otro, con diferencia de la propiedad desconocida/ninguna.
+
+```{r}
+grid.arrange(plotbyInstallmentPlan,plotbyHousing,plotbyForeignWorker,plotbyJob, ncol=2, nrow=2)
+```
+Listado de tablas de contingencia
+
+```{r}
+tabla_DDiT<-table(installment_plan, default)
+tabla_DDiT
+```
+
+```{r}
+prop.table(tabla_DDiT,margin =1)
+```
+
+```{r}
+tabla_DHuT<-table(housing, default)
+tabla_DHuT
+```
+
+```{r}
+prop.table(tabla_DHuT,margin =1)
+```
+
+```{r}
+tabla_DFoT<-table(foreign_worker, default)
+tabla_DFoT
+```
+
+```{r}
+prop.table(tabla_DFoT,margin =1)
+```
+
+```{r}
+tabla_DJoT<-table(job, default)
+tabla_DJoT
+```
+
+```{r}
+prop.table(tabla_DJoT,margin =1)
+```
+
+En el último comjunto de graficas y tablas tenemos que los clientes cuya vivienda propia son los que realizan más creditos y su porcentaje de pago_OK es mayor en comparación de los for free o rent.
+En cuanto si el cliente es un trabajador extranjero o no tenemos que los que realizan más creditos son los extranjeros con 963 clientes.
+Para finalizar tenemos el tipo de trabajo realizado por el cliente donde los empleados calificados realizan un mayor número de creditos y los desempleados no residentes son los que realizan menos creditos con 630 y 22 respectivamente.
+Tal como se mensionó previamente se tiene que el porcentaje de Pago_OK prodomina en comparación a los Impago en todo el análsis de variables.
+
+
+## Test estadísticos de significancia
+
+Procedemos a determinar el grado de significancia de sla relación previamente planteada.
+
+```{r}
+if(!require(DescTools)){
+install.packages('DescTools',repos='http://cran.us.r-project.org')
+library(DescTools)
+}
+```
+
+```{r}
+Phi(tabla_DChT)
+CramerV(tabla_DChT)
+```
+
+```{r}
+Phi(tabla_DCrT)
+CramerV(tabla_DCrT)
+```
+
+```{r}
+Phi(tabla_DPT)
+CramerV(tabla_DPT)
+```
+
+```{r}
+Phi(tabla_DSaT)
+CramerV(tabla_DSaT)
+```
+
+```{r}
+Phi(tabla_DEmT)
+CramerV(tabla_DEmT)
+```
+
+```{r}
+Phi(tabla_DPeT)
+CramerV(tabla_DPeT)
+```
+
+```{r}
+Phi(tabla_DOT)
+CramerV(tabla_DOT)
+```
+
+```{r}
+Phi(tabla_DPrT)
+CramerV(tabla_DPrT)
+```
+
+```{r}
+Phi(tabla_DDiT)
+CramerV(tabla_DDiT)
+```
+
+```{r}
+Phi(tabla_DHuT)
+CramerV(tabla_DHuT)
+```
+
+```{r}
+Phi(tabla_DFoT)
+CramerV(tabla_DFoT)
+```
+
+```{r}
+Phi(tabla_DJoT)
+CramerV(tabla_DJoT)
+```
+
+Segun la guia proporsionada tenemos que los valores de Cramér y Phi entre 0.1 y 0.3 nos indican que la asociación estadística es baja, y entre 0.3 y 0.5 es una asociación media. Finalmente los valores > 0.5 , la asociación estadística entre las variables sería alta. 
+
+Como se puede ver, los valores de Phi y Crámer son identicos, debido a que se tratan de tablas 2x2.
+
+Plot de las tablas de contingencia para visualizar lor receptores de mejor manera.
+
+```{r}
+par(mfrow=c(2,2))
+plot(tabla_DChT, col = c("black","#008000"), main = "IMPAGO vs. SALDO")
+plot(tabla_DCrT, col = c("black","#008000"), main = "IMPAGO vs. HISTORIAL")
+plot(tabla_DPT, col = c("black","#008000"), main = "IMPAGO vs. OBJETIVO")
+plot(tabla_DSaT, col = c("black","#008000"), main = "IMPAGO vs. SALDO")
+plot(tabla_DEmT, col = c("black","#008000"), main = "IMPAGO vs. TIEMPO")
+plot(tabla_DPeT, col = c("black","#008000"), main = "IMPAGO vs. ESTADO")
+plot(tabla_DOT, col = c("black","#008000"), main = "IMPAGO vs. OTROS")
+plot(tabla_DPrT, col = c("black","#008000"), main = "IMPAGO vs. PROPIEDAD")
+plot(tabla_DDiT, col = c("black","#008000"), main = "IMPAGO vs. PLAN")
+plot(tabla_DHuT, col = c("black","#008000"), main = "IMPAGO vs. VIVIENDA")
+plot(tabla_DFoT, col = c("black","#008000"), main = "IMPAGO vs. TRABAJO")
+```
+
+Se puede obtener las mismas asunciones que las graficas de barras anteriores ya que estan basadas en los mismos datos.
+
+A pesar que el Dataset aparentemente está desordenado procedemos a desordenarlo de forma aleatoria al Dataset para ppsterior realización del Random forest.
+
+```{r}
+set.seed(1)
+data_random<-data[sample(nrow(data)),]
+```
+
+# MODELO 1
+
+## Preparación de los datos para el modelo
+
+Procedemos a dividir el Dataset en conjunto de Entrenamiento o Train y Prueba o Test donde el primero tendrá 2/3 de todo los datos y 1/3 corresponderá para el conjunto de prueba para la evaluacion del modelo.
+Para las variables independientes o X podemos usar los valores de Cramér y Phi para determinar las variables que tienen m[as correlación con el target "default"
+
+```{r}
+set.seed(666)
+y<-data_random[,"default"]
+X<-data_random[,c("checking_balance", "credit_history", "purpose", "savings_balance","employment_length", "property", "housing" )]
+```
+
+Separamos los datos en forma dinnámica en funcion de split_prop
+
+```{r}
+split_prop<-3
+max_split<-floor(nrow(X)/split_prop)
+tr_limit<-nrow(X)-max_split
+ts_limit<-nrow(X)-max_split+1
+trainX<-X[1:tr_limit,]
+trainy<-y[1:tr_limit]
+testX<-X[ts_limit+1:nrow(X),]
+testy<-y[ts_limit+1:nrow(X)]
+```
+
+Tambien se puede crear directamente un rango usando split_plot.
+
+```{r}
+split_prop<-3
+indexes=sample(1:nrow(data),size=floor(((split_prop-1)/split_prop)*nrow(data)))
+trainX<-X[indexes,]
+trainy<-y[indexes]
+testX<-X[-indexes,]
+testy<-y[-indexes]
+```
+
+Análisis de datos minimos para asegurarse de no obtener clasificadores sesgados.
+
+```{r}
+summary(trainX)
+```
+
+```{r}
+summary(trainy)
+```
+
+```{r}
+summary(testX)
+```
+
+```{r}
+summary(testy)
+```
+Se verifica que no hay diferencias graves que puedan sesgar las conclusiones.
+
+## Creación del modelo, calidad del modelo y extracción de reglas
+
+Se crea el árbol de decisión usando los datos de entrenamiento 
+
+```{r}
+trainy=as.factor(trainy)
+model<-C50::C5.0(trainX, trainy,rules=TRUE )
+summary(model)
+```
+
+Errors muestra el número y porcentaje de casos mal clasificados en el subconjunto de entrenamiento. El árbol obtenido clasifica erróneamente 156 de los 666 casos dados, una tasa de error del 23.4 %.
+
+Mediante las reglas podemos asumir que:
+-   checking_balance = 1 - 200 DM ó < 0 DM y purpose = radio/tv y employment_length = 1 - 4 yrs property = other, building society savings, unknown/none y housing = rent, for free → Impago. Validéz: 87.5%
+
+-   checking_balance = 1 - 200 DM ó < 0 DM y purpose = radio/tv y employment_length = unemployed ó 0 - 1 yrs y propiedad = property other, building society savings ó unknown/none → Impago. Validéz: 68.5%
+
+-   checking_balance = 1 - 200 DM ó < 0 DM y credit_history = repaid y purpose = car (new), others, repairs, domestic appliances ó retraining y property = other y building = society savings ó unknown/none → Impago. Validéz: 67.7%
+
+- checking_balance = 1 - 200 DM y credit_history = repaid y purpose = furniture y property = other, building society savings ó unknown/none ->  Impago. Validéz: 60%.
+
+-  checking_balance = 1 - 200 DM ó < 0 DM y property = other, building society savings ó unknown/none	->  Impago. Validéz: 51.1%.
+
+-   checking_balance = unknown ó > 200 DM ->  Pago OK. Validéz: 86.7%
+
+-   credit_history = critical	-> Pago OK. Validéz: 84.2%
+
+-   purpose = car (used) -> Pago OK. Validéz = 82.9%
+
+-   property = real estate	->  Pago OK. Validéz = 78.7%.
+
+-   credit_history = repaid	-> Pago OK. Validéz:  67.2%.
+
+Por tanto, podemos concluir que el conocimiento extraído y cruzado con el análisis visual se resume en si se presentan un conjunto de caracteristicas desfavorables ese cliente tendrá un Impago tal es el caso de checking_balance < 200 DM o que esta desempleado o mientras menor sea el tiempo de empleo tendrá más probabilidades de no cumplir con el pago. Esto ratifica la logica que mientras mayor solvencia y estabilidad económica de una persona puede tener un pago correcto del credito, es decir si posee vivienda propia, si sus ahorros son elevados, si posee un empleo de muchos años, etc.
+
+A continuación el árbol obtenido
+
+```{r}
+model<-C50::C5.0(trainX, trainy)
+plot(model)
+```
+
+## Validación del modelo con los datos reservados
+
+Comprobar la calidad del modelo propuesto a través de el conjunto de datos de prueba.
+
+```{r}
+predicted_model <- predict( model, testX, type="class" )
+print(sprintf("La precisión del árbol es: %.4f %%",100*sum(predicted_model == testy) / length(predicted_model)))
+```
+
+Análisis de la presición a través de la matriz de confusión que identifica los tipos de errores cometidos.
+
+```{r}
+mat_conf<-table(testy,Predicted=predicted_model)
+mat_conf
+```
+Otra manera de calcular el porcentaje de registros correctamente clasificados usando la matriz de confusión:
+
+```{r}
+
+porcentaje_correct<-100 * sum(diag(mat_conf)) / sum(mat_conf)
+print(sprintf("El %% de registros correctamente clasificados es: %.4f %%",porcentaje_correct))
+
+```
+
+A través del paquete gmodels para obtener información más completa:
+
+```{r}
+if(!require(gmodels)){
+install.packages('gmodels',repos='http://cran.us.r-project.org')
+library(gmodels)
+}
+```
+
+```{r}
+CrossTable(testy, predicted_model,prop.chisq  = FALSE, prop.c = FALSE, prop.r =FALSE,dnn = c('Reality', 'Prediction'))
+```
+
+## Prueba con una variación u otro enfoque algorítmico
+
+Incorporación de “adaptative boosting” para generar varios clasificadores, con sus correspondientes arboles de decisión y su ser de reglas. Cuando un nuevo caso va a ser clasificado, cada clasificador vota cual es la clase predicha. Los votos son sumados y determina la clase final.
+
+```{r}
+modelo2<-C50::C5.0(trainX, trainy,trials =10)
+plot(modelo2)
+```
+
+Vemos a continuación cómo son las predicciones del nuevo árbol:
+
+```{r}
+predicted_model2 <- predict( modelo2, testX, type="class" )
+print(sprintf("La precisión del árbol es: %.4f %%",100*sum(predicted_model2 == testy) / length(predicted_model2)))
+```
+Observamos como se modifica levemente la precisión del modelo a mejor.
+
+```{r}
+mat_conf<-table(testy,Predicted=predicted_model2)
+mat_conf
+```
+
+Usando la matriz de confusión:
+
+```{r}
+
+porcentaje_correct<-100 * sum(diag(mat_conf)) / sum(mat_conf)
+print(sprintf("El %% de registros correctamente clasificados es: %.4f %%",porcentaje_correct))
+
+```
+
+El algoritmo C5.0 incorpora algunas opciones para ver la importancia de las variables.
+
+```{r}
+importancia_usage <- C50::C5imp(modelo2, metric = "usage")
+importancia_splits <- C50::C5imp(modelo2, metric = "splits")
+importancia_usage
+```
+
+```{r}
+importancia_splits
+```
+Como se puede observar los resulatados tanto de importancia_usage yu de importancia_splits se da de forma decreciente señalando así que las primeras variables van a ser las que tengan mayor peso o importancia en nuestro modelo
+
+# MODELO 2
+
+## Preparación de los datos para el modelo
+
+Procedemos a dividir el Dataset en conjunto de Entrenamiento o Train y Prueba o Test donde el primero tendrá 4/5 de todo los datos y 1/5 corresponderá para el conjunto de prueba para la evaluacion del modelo.
+Para las variables independientes o X podemos usar los valores de Cramér y Phi para determinar las variables que tienen m[as correlación con el target "default"
+
+```{r}
+set.seed(800)
+y<-data_random[,"default"]
+X<-data_random[,c("checking_balance", "credit_history", "purpose", "savings_balance","employment_length" )]
+```
+
+Tambien se puede crear directamente un rango usando split_plot.
+
+```{r}
+split_prop<-5
+indexes=sample(1:nrow(data),size=floor(((split_prop-1)/split_prop)*nrow(data)))
+trainX<-X[indexes,]
+trainy<-y[indexes]
+testX<-X[-indexes,]
+testy<-y[-indexes]
+```
+```{r}
+str(X)
+```
+
+
+Análisis de datos minimos para asegurarse de no obtener clasificadores sesgados.
+
+```{r}
+summary(trainX)
+```
+
+```{r}
+summary(trainy)
+```
+
+```{r}
+summary(testX)
+```
+
+```{r}
+summary(testy)
+```
+Se verifica que no hay diferencias graves que puedan sesgar las conclusiones.
+
+## Creación del modelo, calidad del modelo y extracción de reglas
+
+Se crea el árbol de decisión usando los datos de entrenamiento 
+
+```{r}
+trainy=as.factor(trainy)
+model<-C50::C5.0(trainX, trainy,rules=TRUE )
+summary(model)
+```
+
+Errors muestra el número y porcentaje de casos mal clasificados en el subconjunto de entrenamiento. El árbol obtenido clasifica erróneamente 181 de los 800 casos dados, una tasa de error del 22.6 %.
+
+Mediante las reglas podemos asumir que:
+-   checking_balance = < 0 DM y credit_history = repaid y	purpose = furniture y	savings_balance = < 100 DM y employment_length = > 7 yrs -> Impago. Validéz: 83.3%
+
+-   checking_balance = 1 - 200 DM y purpose = furniture y savings_balance = < 100 DM y employment_length = 1 - 4 yrs	->  Impago. Validéz: 80%
+
+-   checking_balance = < 0 DM ó 1 - 200 DM y purpose = radio/tv, furniture, domestic appliances, ó education y savings_balance = 101 - 500 DM y ->  Impago. Validéz: 78.9%
+
+-   checking_balance in < 0 DM ó 1 - 200 DM y credit_history = fully repaid this bank, fully ó repaid ->  Impago. Validéz: 71.9%
+
+-   checking_balance = < 0 DM ó 1 - 200 DM y credit_history = repaid ó delayed, purpose = car (new) y savings_balance = < 100 DM -> Impago. Validéz:68.8%.
+
+-   checking_balance = 1 - 200 DM, credit_history = critical y	purpose = car (new) y 
+	savings_balance = < 100 DM -> Impago. Validéz: 66.7%
+
+-   checking_balance = < 0 DM ó 1 - 200 DM y purpose = car (new) y savings_balance = < 100 DM	->  Impago. Validéz:61.3%
+
+-   checking_balance in {unknown ó > 200 DM} ->  Pago OK. Validéz: 86.9%
+
+-   checking_balance = 1 - 200 DM y savings_balance = unknown	->  Pago OK  Validéz: 82.9%
+
+-   credit_history = critical, repaid ó delayed ->Pago OK. Validéz: 72%
+	
+
+Se puede obtener la misma concluision que el modelo 1 planteado ya que las variables disminuyeron pero siguen siendo las mismas donde el conocimiento extraído y cruzado con el análisis visual se resume en si se presentan un conjunto de caracteristicas desfavorables ese cliente tendrá un Impago tal es el caso de checking_balance < 200 DM o que esta desempleado o mientras menor sea el tiempo de empleo tendrá más probabilidades de no cumplir con el pago. 
+
+A continuación el árbol obtenido
+
+```{r}
+model<-C50::C5.0(trainX, trainy)
+plot(model)
+```
+
+## Validación del modelo con los datos reservados
+
+Comprobar la calidad del modelo propuesto a través de el conjunto de datos de prueba.
+
+```{r}
+predicted_model <- predict( model, testX, type="class" )
+print(sprintf("La precisión del árbol es: %.4f %%",100*sum(predicted_model == testy) / length(predicted_model)))
+```
+
+Análisis de la presición a través de la matriz de confusión que identifica los tipos de errores cometidos.
+
+```{r}
+mat_conf<-table(testy,Predicted=predicted_model)
+mat_conf
+```
+Otra manera de calcular el porcentaje de registros correctamente clasificados usando la matriz de confusión:
+
+```{r}
+
+porcentaje_correct<-100 * sum(diag(mat_conf)) / sum(mat_conf)
+print(sprintf("El %% de registros correctamente clasificados es: %.4f %%",porcentaje_correct))
+
+```
+
+A través del paquete gmodels para obtener información más completa:
+
+```{r}
+if(!require(gmodels)){
+install.packages('gmodels',repos='http://cran.us.r-project.org')
+library(gmodels)
+}
+```
+
+```{r}
+CrossTable(testy, predicted_model,prop.chisq  = FALSE, prop.c = FALSE, prop.r =FALSE,dnn = c('Reality', 'Prediction'))
+```
+
+
+
+
+# MODELO 3
+
+## Preparación de los datos para el modelo
+
+Procedemos a dividir el Dataset en conjunto de Entrenamiento o Train y Prueba o Test donde el primero tendrá es decir 3/4 de todo los datos y 1/4 corresponderá para el conjunto de prueba para la evaluacion del modelo.
+Para las variables independientes o X podemos usar los valores de Cramér y Phi para determinar las variables que tienen más correlación con el target "default", a su vez al tratarse del una variante del modelo se usó las variables de "foreign_worker", "job" cuyos valores de Cramér y Phi son los más bajos
+
+```{r}
+set.seed(750)
+y<-data_random[,"default"]
+X<-data_random[,c("checking_balance", "credit_history", "savings_balance","employment_length", "foreign_worker", "job")]
+```
+
+Creación de un rango usando split_plot.
+
+```{r}
+split_prop<-4
+indexes=sample(1:nrow(data),size=floor(((split_prop-1)/split_prop)*nrow(data)))
+trainX<-X[indexes,]
+trainy<-y[indexes]
+testX<-X[-indexes,]
+testy<-y[-indexes]
+```
+
+
+## Creación del modelo, calidad del modelo y extracción de reglas
+
+Se crea el árbol de decisión usando los datos de entrenamiento 
+
+```{r}
+trainy=as.factor(trainy)
+model<-C50::C5.0(trainX, trainy,rules=TRUE )
+summary(model)
+```
+
+Errors muestra el número y porcentaje de casos mal clasificados en el subconjunto de entrenamiento. El árbol obtenido clasifica erróneamente 180 de los 750 casos dados, una tasa de error del 24.0 %.
+
+Mediante las reglas podemos asumir que:
+-   checking_balance = < 0 DM y credit_history = delayed y savings_balance = < 100 DM -> Impago. Validéz:80%
+
+-   checking_balance = < 0 DM, 1 - 200 DM, > 200 DM y credit_history = fully repaid this bank, fully repaid
+	savings_balance = < 100 DM, 101 - 500 DM y -> Impago. Validéz: 71.1%
+
+-   checking_balance = < 0 DM y credit_history = repaid y	savings_balance = < 100 DM, 101 - 500 DM y job = skilled employee, unemployed non-resident -> Impago. Validéz: 65.6%
+
+-   checking_balance = 1 - 200 DM y	savings_balance = < 100 DM, 101 - 500 DM y	job = mangementy self-employed -> Impago. Validéz:61.3%
+
+-   checking_balance = < 0 DM y savings_balance = < 100 DM, 101 - 500 DM -> Impago. Validéz: 54%
+	
+-   checking_balance = unknown -> Pago OK. Validéz: 88.2%.
+
+-   savings_balance = unknown, > 1000 DM, 501 - 1000 DM	-> Pago OK. Validéz: 83.6%
+
+-   credit_history = critical -> Pago OK. Validéz: 82%
+
+-   credit_history = repaid, critical, delayed y job = skilled employee, unskilled resident, unemployed non-resident
+	-> Pago OK. Validéz: 72.9%
+
+Se pude determinar similares coclusiones alos dos modelos anteriores con la adición que ahora tenemos la inclusion devariables cuyo valor de Cramér y Phi son los más bajos, es así que observamos que cuando se incluyen las variables de Job y foreign_worker en las reglas su Validéz tiende a disminuir, indicando así que no va a existir una eficiente prediccion de default.
+
+A continuación el árbol obtenido
+
+```{r}
+model<-C50::C5.0(trainX, trainy)
+plot(model)
+```
+
+## Validación del modelo con los datos reservados
+
+Comprobar la calidad del modelo propuesto a través de el conjunto de datos de prueba.
+
+```{r}
+predicted_model <- predict( model, testX, type="class" )
+print(sprintf("La precisión del árbol es: %.4f %%",100*sum(predicted_model == testy) / length(predicted_model)))
+```
+
+Análisis de la presición a través de la matriz de confusión que identifica los tipos de errores cometidos.
+
+```{r}
+mat_conf<-table(testy,Predicted=predicted_model)
+mat_conf
+```
+
+```{r}
+mat_conf<-table(testy,Predicted=predicted_model)
+mat_conf
+```
+Otra manera de calcular el porcentaje de registros correctamente clasificados usando la matriz de confusión:
+
+```{r}
+
+porcentaje_correct<-100 * sum(diag(mat_conf)) / sum(mat_conf)
+print(sprintf("El %% de registros correctamente clasificados es: %.4f %%",porcentaje_correct))
+
+```
+
+A través del paquete gmodels para obtener información más completa:
+
+```{r}
+if(!require(gmodels)){
+install.packages('gmodels',repos='http://cran.us.r-project.org')
+library(gmodels)
+}
+```
+
+```{r}
+CrossTable(testy, predicted_model,prop.chisq  = FALSE, prop.c = FALSE, prop.r =FALSE,dnn = c('Reality', 'Prediction'))
+```
+
+## Prueba con una variación u otro enfoque algorítmico
+
+Incorporación de “adaptative boosting” para generar varios clasificadores, con sus correspondientes arboles de decisión y su ser de reglas. Cuando un nuevo caso va a ser clasificado, cada clasificador vota cual es la clase predicha. Los votos son sumados y determina la clase final.
+
+```{r}
+modelo4<-C50::C5.0(trainX, trainy,trials =10)
+plot(modelo4)
+```
+
+Vemos a continuación cómo son las predicciones del nuevo árbol:
+
+```{r}
+predicted_model4 <- predict( modelo4, testX, type="class" )
+print(sprintf("La precisión del árbol es: %.4f %%",100*sum(predicted_model4 == testy) / length(predicted_model4)))
+```
+Observamos como se modifica levemente la precisión del modelo a mejor.
+
+```{r}
+mat_conf<-table(testy,Predicted=predicted_model4)
+mat_conf
+```
+
+Usando la matriz de confusión:
+
+```{r}
+
+porcentaje_correct<-100 * sum(diag(mat_conf)) / sum(mat_conf)
+print(sprintf("El %% de registros correctamente clasificados es: %.4f %%",porcentaje_correct))
+
+```
+```{r}
+importancia_usage <- C50::C5imp(modelo2, metric = "usage")
+importancia_splits <- C50::C5imp(modelo2, metric = "splits")
+importancia_usage
+```
+
+```{r}
+importancia_splits
+```
+Como se puede observar los resulatados tanto de importancia_usage yu de importancia_splits se da de forma decreciente señalando así que las primeras variables van a ser las que tengan mayor peso o importancia en nuestro modelo.
+
+
+# CONCLUSIONES
+
+- En Clasificación con árboles de decisión se pudo observar que al aumentar las variables independientes (x) no significa que la presicion aumentará y el error disminuirá en todos los casos, es decir el modelo puede llegar a ser mejor con menos variables independientes.
+
+- Mediante los valores de Valores de la V de Cramér y Phi se puedo obtener las variables cuya relacion con el target (default) es la más elevada, esta funcion fue empleada para la disminución de nuestros datos y por ende de los recursos computacionales al momento del entrenamiento y predicción.
+
+- En el planteamiento de los tres modelos se tanto la presicion por el primer métod y el % de registros correctamente clasificados serán los mismos ya que nada mas fueron resuletos por métodos distintos como la matriz de confusión.
+
+- El modelo C50 posibilita observar las reglas generadas para obtener el resutado requerido, es así que puee tratrase de una regla comuesta o no de diversas condiciones.
+
+- El mejor modelo fue el MODELO 1 con el uso de adaptative boosting donde se obtuvo una pressicion de 76.048%, esto se debe a que se usó las variables que poseen mayor valor de la V de Cramér y Phi
